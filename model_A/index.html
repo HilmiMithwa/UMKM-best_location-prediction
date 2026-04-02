@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UMKM.AI — Analisis Spasial Lokasi UMKM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #3b82f6;
+    --accent2: #06b6d4;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --font: 'Space Grotesk', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1000;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 18px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .header-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: rgba(59,130,246,0.15);
+    border: 1px solid rgba(59,130,246,0.3);
+    color: var(--accent);
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+  }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 320px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .sidebar-section {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  /* SELECT */
+  .select-wrapper {
+    position: relative;
+    margin-bottom: 12px;
+  }
+
+  select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 36px 10px 14px;
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 13px;
+    appearance: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  select:focus { outline: none; border-color: var(--accent); }
+
+  .select-arrow {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    font-size: 10px;
+  }
+
+  /* BUTTON */
+  .btn-analyze {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-family: var(--font);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    margin-top: 4px;
+  }
+
+  .btn-analyze:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-analyze:active { transform: translateY(0); }
+  .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* LEGEND */
+  .legend-items { display: flex; flex-direction: column; gap: 8px; }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legend-dot.high { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+  .legend-dot.med { background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,0.5); }
+  .legend-dot.low { background: #3b82f6; box-shadow: 0 0 8px rgba(59,130,246,0.5); }
+
+  /* STATS */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* LOCATION DETAIL PANEL */
+  .detail-panel {
+    padding: 20px;
+    display: none;
+  }
+
+  .detail-panel.visible { display: block; }
+
+  .detail-score-ring {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .score-circle {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 3px solid;
+    position: relative;
+  }
+
+  .score-circle.high { border-color: var(--danger); background: rgba(239,68,68,0.1); }
+  .score-circle.med { border-color: var(--warning); background: rgba(245,158,11,0.1); }
+  .score-circle.low { border-color: var(--accent); background: rgba(59,130,246,0.1); }
+
+  .score-num {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--mono);
+    line-height: 1;
+  }
+
+  .score-num.high { color: var(--danger); }
+  .score-num.med { color: var(--warning); }
+  .score-num.low { color: var(--accent); }
+
+  .score-pct { font-size: 9px; color: var(--text-muted); }
+
+  .detail-meta { flex: 1; }
+  .detail-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .detail-coords { font-family: var(--mono); font-size: 10px; color: var(--text-muted); }
+
+  /* FACTOR BARS */
+  .factors { margin-top: 16px; }
+  .factor-item { margin-bottom: 12px; }
+
+  .factor-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 11px;
+  }
+
+  .factor-name { color: var(--text); }
+
+  .factor-value {
+    font-family: var(--mono);
+    font-weight: 500;
+  }
+
+  .factor-value.pos { color: var(--success); }
+  .factor-value.neg { color: var(--danger); }
+
+  .factor-bar-bg {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .factor-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  .factor-bar-fill.pos { background: var(--success); }
+  .factor-bar-fill.neg { background: var(--danger); }
+
+  /* EXPLANATION BOX */
+  .explanation-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 14px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-muted);
+  }
+
+  .explanation-box strong { color: var(--text); }
+
+  /* TOP RECS */
+  .rec-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .rec-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .rec-item:hover { border-color: var(--accent); }
+
+  .rec-rank {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .rec-rank.r1 { background: rgba(239,68,68,0.2); color: var(--danger); }
+  .rec-rank.r2 { background: rgba(245,158,11,0.2); color: var(--warning); }
+  .rec-rank.r3 { background: rgba(59,130,246,0.2); color: var(--accent); }
+
+  .rec-info { flex: 1; min-width: 0; }
+  .rec-area { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec-score-text { font-size: 10px; color: var(--text-muted); font-family: var(--mono); }
+
+  /* LOADING */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,14,26,0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .loading-overlay.visible { display: flex; }
+
+  .loading-spinner {
+    width: 44px; height: 44px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+  }
+
+  /* MAP */
+  #map-container {
+    flex: 1;
+    position: relative;
+  }
+
+  #map { width: 100%; height: 100%; }
+
+  /* INSTRUCTION */
+  .map-instruction {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(17,24,39,0.9);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 8px 20px;
+    font-size: 12px;
+    color: var(--text-muted);
+    z-index: 500;
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  /* PULSE MARKER */
+  .pulse-marker {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 rgba(59,130,246,0.4);
+    animation: pulse-anim 1.5s infinite;
+  }
+
+  @keyframes pulse-anim {
+    0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(59,130,246,0); }
+    100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📍</div>
+    UMKM<span>.AI</span>
+  </div>
+  <div class="header-badge">PROTOTYPE v0.1 — Track C</div>
+</header>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- INPUT SECTION -->
+    <div class="sidebar-section">
+      <div class="section-label">Parameter Analisis</div>
+
+      <div class="select-wrapper">
+        <select id="sector-select">
+          <option value="">— Pilih Jenis Usaha —</option>
+          <option value="kuliner">🍜 Kuliner / F&B</option>
+          <option value="retail">🛍️ Retail / Toko</option>
+          <option value="jasa">⚙️ Jasa & Servis</option>
+          <option value="fashion">👗 Fashion / Pakaian</option>
+          <option value="kesehatan">💊 Kesehatan / Apotek</option>
+        </select>
+        <span class="select-arrow">▼</span>
+      </div>
+
+      <div class="select-wrapper">
+        <select id="target-select">
+          <option value="semua">👥 Semua Segmen</option>
+          <option value="mahasiswa">🎓 Mahasiswa</option>
+          <option value="keluarga">👨‍👩‍👧 Keluarga</option>
+          <option value="pekerja">💼 Pekerja Kantoran</option>
+        </select>
+        <span class="select-arrow">▼</span>
+      </div>
+
+      <button class="btn-analyze" id="analyze-btn" onclick="runAnalysis()">
+        ⚡ Generate Heatmap
+      </button>
+    </div>
+
+    <!-- LEGEND -->
+    <div class="sidebar-section">
+      <div class="section-label">Legenda Skor</div>
+      <div class="legend-items">
+        <div class="legend-item">
+          <div class="legend-dot high"></div>
+          <span>71–100 &nbsp;·&nbsp; <strong>Sangat Strategis</strong></span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot med"></div>
+          <span>41–70 &nbsp;&nbsp;·&nbsp; <strong>Cukup Strategis</strong></span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot low"></div>
+          <span>0–40 &nbsp;&nbsp;&nbsp;·&nbsp; <strong>Kurang Strategis</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS (hidden until analysis runs) -->
+    <div class="sidebar-section" id="stats-section" style="display:none">
+      <div class="section-label">Statistik Bandung</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total">—</div>
+          <div class="stat-label">Titik Dianalisis</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-avg">—</div>
+          <div class="stat-label">Rata-rata Skor</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-high">—</div>
+          <div class="stat-label">Zona Strategis</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-sector">—</div>
+          <div class="stat-label">Sektor</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOP RECOMMENDATIONS -->
+    <div class="sidebar-section" id="recs-section" style="display:none">
+      <div class="section-label">Top 3 Rekomendasi</div>
+      <div class="rec-list" id="rec-list"></div>
+    </div>
+
+    <!-- LOCATION DETAIL (shown on pin drop) -->
+    <div class="detail-panel" id="detail-panel">
+      <div class="section-label">Detail Lokasi</div>
+
+      <div class="detail-score-ring">
+        <div class="score-circle" id="score-circle">
+          <span class="score-num" id="score-num">—</span>
+          <span class="score-pct">/ 100</span>
+        </div>
+        <div class="detail-meta">
+          <div class="detail-title" id="detail-title">—</div>
+          <div class="detail-coords" id="detail-coords">—</div>
+        </div>
+      </div>
+
+      <div class="factors" id="factors-container"></div>
+
+      <div class="explanation-box" id="explanation-box">
+        Klik titik pada peta untuk melihat analisis lokasi.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MAP -->
+  <div id="map-container">
+    <div id="map"></div>
+    <div class="map-instruction" id="map-instruction">
+      🖱️ Generate heatmap terlebih dahulu, lalu klik titik mana saja untuk analisis detail
+    </div>
+    <div class="loading-overlay" id="loading">
+      <div class="loading-spinner"></div>
+      <div class="loading-text" id="loading-text">Memproses model AI...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SIMULATED AI MODEL (menggantikan scikit-learn Random Forest)
+// Dalam implementasi nyata: ini diganti dengan API call ke
+// backend Python yang menjalankan model .pkl asli
+// ============================================================
+
+// Bobot fitur per sektor (simulasi feature importance dari Random Forest)
+const SECTOR_WEIGHTS = {
+  kuliner: {
+    kepadatan_penduduk: 0.25,
+    jumlah_poi_kuliner: 0.20,
+    jumlah_kampus: 0.18,
+    jumlah_kompetitor: -0.15,  // negatif = makin banyak kompetitor makin buruk
+    aksesibilitas_jalan: 0.12,
+    daya_beli: 0.10,
+  },
+  retail: {
+    kepadatan_penduduk: 0.30,
+    aksesibilitas_jalan: 0.22,
+    daya_beli: 0.20,
+    jumlah_kompetitor: -0.12,
+    jumlah_kampus: 0.10,
+    jumlah_poi_kuliner: 0.06,
+  },
+  jasa: {
+    kepadatan_penduduk: 0.20,
+    daya_beli: 0.25,
+    aksesibilitas_jalan: 0.20,
+    jumlah_kampus: 0.15,
+    jumlah_kompetitor: -0.10,
+    jumlah_poi_kuliner: 0.10,
+  },
+  fashion: {
+    daya_beli: 0.30,
+    kepadatan_penduduk: 0.22,
+    aksesibilitas_jalan: 0.18,
+    jumlah_kampus: 0.15,
+    jumlah_kompetitor: -0.10,
+    jumlah_poi_kuliner: 0.05,
+  },
+  kesehatan: {
+    kepadatan_penduduk: 0.35,
+    daya_beli: 0.20,
+    aksesibilitas_jalan: 0.18,
+    jumlah_kompetitor: -0.12,
+    jumlah_kampus: 0.10,
+    jumlah_poi_kuliner: 0.05,
+  },
+};
+
+// Zona karakteristik Bandung (simulasi data OSM + BPS)
+// Format: [lat, lon, kepadatan, poi_kuliner, kampus, aksesibilitas, daya_beli, nama_area]
+const BANDUNG_ZONES = [
+  // Pusat Bandung - sangat padat
+  [-6.921, 107.607, 0.92, 0.88, 0.30, 0.95, 0.85, "Alun-Alun Bandung"],
+  [-6.918, 107.613, 0.88, 0.90, 0.25, 0.90, 0.80, "Pasar Baru"],
+  [-6.914, 107.608, 0.85, 0.75, 0.20, 0.88, 0.78, "Braga"],
+  [-6.909, 107.618, 0.82, 0.70, 0.22, 0.85, 0.82, "Asia Afrika"],
+  [-6.925, 107.615, 0.80, 0.85, 0.18, 0.87, 0.75, "Kebon Jukut"],
+  [-6.917, 107.602, 0.78, 0.80, 0.15, 0.85, 0.77, "Cicendo"],
+
+  // Area Kampus - Dago, Coblong
+  [-6.895, 107.616, 0.75, 0.82, 0.95, 0.80, 0.70, "Dago / ITB"],
+  [-6.898, 107.621, 0.72, 0.78, 0.90, 0.78, 0.68, "Coblong"],
+  [-6.903, 107.618, 0.70, 0.75, 0.85, 0.75, 0.65, "Lebak Siliwangi"],
+  [-6.889, 107.610, 0.68, 0.72, 0.88, 0.72, 0.60, "Sekeloa"],
+  [-6.892, 107.625, 0.65, 0.70, 0.80, 0.70, 0.58, "Dipatiukur"],
+
+  // Buah Batu - Residensial berkembang
+  [-6.952, 107.638, 0.70, 0.65, 0.30, 0.72, 0.72, "Buah Batu"],
+  [-6.958, 107.645, 0.65, 0.60, 0.25, 0.68, 0.68, "Sekejati"],
+  [-6.945, 107.642, 0.68, 0.62, 0.28, 0.70, 0.70, "Cijawura"],
+  [-6.962, 107.650, 0.60, 0.55, 0.20, 0.65, 0.65, "Margasari"],
+
+  // Antapani - Padat residensial
+  [-6.930, 107.655, 0.75, 0.68, 0.22, 0.74, 0.72, "Antapani"],
+  [-6.935, 107.660, 0.72, 0.65, 0.20, 0.70, 0.68, "Cicaheum"],
+  [-6.928, 107.662, 0.68, 0.62, 0.18, 0.68, 0.65, "Jatihandap"],
+
+  // Sukajadi - Mix residensial dan komersial
+  [-6.897, 107.594, 0.72, 0.70, 0.35, 0.75, 0.73, "Sukajadi"],
+  [-6.902, 107.588, 0.68, 0.65, 0.30, 0.70, 0.68, "Pasteur"],
+  [-6.908, 107.582, 0.65, 0.60, 0.28, 0.72, 0.65, "Pajajaran"],
+
+  // Ujungberung - Pinggiran timur
+  [-6.910, 107.718, 0.50, 0.42, 0.10, 0.52, 0.45, "Ujungberung"],
+  [-6.918, 107.725, 0.45, 0.38, 0.08, 0.48, 0.42, "Cibiru"],
+  [-6.922, 107.710, 0.48, 0.40, 0.10, 0.50, 0.43, "Cipadung"],
+
+  // Bandung Barat - Pinggiran barat
+  [-6.915, 107.555, 0.48, 0.40, 0.12, 0.50, 0.44, "Cimahi Selatan"],
+  [-6.908, 107.562, 0.45, 0.38, 0.10, 0.48, 0.42, "Cijerah"],
+  [-6.920, 107.570, 0.50, 0.42, 0.15, 0.52, 0.46, "Caringin"],
+
+  // Kiaracondong - Padat menengah
+  [-6.930, 107.638, 0.72, 0.68, 0.18, 0.70, 0.65, "Kiaracondong"],
+  [-6.935, 107.632, 0.68, 0.65, 0.15, 0.68, 0.62, "Babakan Surabaya"],
+
+  // BDG Utara
+  [-6.878, 107.600, 0.62, 0.58, 0.40, 0.65, 0.60, "Lembang (selatan)"],
+  [-6.882, 107.612, 0.65, 0.60, 0.38, 0.68, 0.62, "Ciumbuleuit"],
+
+  // Tambahan titik untuk kepadatan heatmap
+  [-6.940, 107.620, 0.70, 0.65, 0.20, 0.72, 0.68, "Regol"],
+  [-6.944, 107.610, 0.68, 0.62, 0.18, 0.70, 0.65, "Pasirluyu"],
+  [-6.912, 107.630, 0.75, 0.70, 0.25, 0.78, 0.72, "Lengkong"],
+  [-6.905, 107.635, 0.72, 0.68, 0.28, 0.75, 0.70, "Batununggal"],
+  [-6.915, 107.645, 0.68, 0.65, 0.22, 0.70, 0.67, "Rancasari"],
+];
+
+// ============================================================
+// MODEL INFERENCE FUNCTION (simulasi Random Forest predict)
+// ============================================================
+function predictScore(zoneData, sector) {
+  const [lat, lon, kepadatan, poi_kuliner, kampus, aksesibilitas, daya_beli] = zoneData;
+  const weights = SECTOR_WEIGHTS[sector] || SECTOR_WEIGHTS.kuliner;
+
+  // Simulasi jumlah kompetitor (inversely correlated dengan poi_kuliner)
+  const kompetitor = sector === 'kuliner' ? poi_kuliner * 0.7 : poi_kuliner * 0.3;
+
+  const features = {
+    kepadatan_penduduk: kepadatan,
+    jumlah_poi_kuliner: poi_kuliner,
+    jumlah_kampus: kampus,
+    jumlah_kompetitor: kompetitor,
+    aksesibilitas_jalan: aksesibilitas,
+    daya_beli: daya_beli,
+  };
+
+  // Weighted sum (simulasi Random Forest output)
+  let raw = 0;
+  let totalWeight = 0;
+  for (const [feat, weight] of Object.entries(weights)) {
+    const absW = Math.abs(weight);
+    totalWeight += absW;
+    if (weight > 0) {
+      raw += features[feat] * weight;
+    } else {
+      raw += (1 - features[feat]) * Math.abs(weight);
+    }
+  }
+
+  // Normalize ke 0-100 dengan sedikit noise untuk realisme
+  const noise = (Math.random() - 0.5) * 0.05;
+  const score = Math.min(100, Math.max(5, Math.round((raw / totalWeight + noise) * 100)));
+  return score;
+}
+
+// ============================================================
+// SHAP-LIKE EXPLANATION (simulasi SHAP values)
+// ============================================================
+function generateExplanation(zoneData, sector, score) {
+  const [lat, lon, kepadatan, poi_kuliner, kampus, aksesibilitas, daya_beli, area] = zoneData;
+  const weights = SECTOR_WEIGHTS[sector] || SECTOR_WEIGHTS.kuliner;
+  const kompetitor = sector === 'kuliner' ? poi_kuliner * 0.7 : poi_kuliner * 0.3;
+
+  const featureValues = {
+    kepadatan_penduduk: kepadatan,
+    jumlah_poi_kuliner: poi_kuliner,
+    jumlah_kampus: kampus,
+    jumlah_kompetitor: kompetitor,
+    aksesibilitas_jalan: aksesibilitas,
+    daya_beli: daya_beli,
+  };
+
+  const featureLabels = {
+    kepadatan_penduduk: "Kepadatan Penduduk",
+    jumlah_poi_kuliner: "Keramaian Area",
+    jumlah_kampus: "Kedekatan Kampus",
+    jumlah_kompetitor: "Tingkat Kompetitor",
+    aksesibilitas_jalan: "Aksesibilitas Jalan",
+    daya_beli: "Daya Beli Masyarakat",
+  };
+
+  // Hitung SHAP-like contribution per fitur
+  const contributions = Object.entries(weights).map(([feat, w]) => {
+    const val = featureValues[feat];
+    const contribution = w > 0 ? val * w : (1 - val) * Math.abs(w);
+    const isPositive = w > 0 ? val > 0.5 : val < 0.5;
+    return {
+      name: featureLabels[feat],
+      key: feat,
+      contribution: Math.abs(contribution),
+      isPositive,
+      value: val,
+      weight: w,
+    };
+  }).sort((a, b) => b.contribution - a.contribution);
+
+  // Top 3 faktor
+  const top3 = contributions.slice(0, 3);
+
+  // Generate narasi
+  const sectorNames = {
+    kuliner: 'kuliner/F&B', retail: 'retail', jasa: 'jasa',
+    fashion: 'fashion', kesehatan: 'kesehatan'
+  };
+
+  const scoreCategory = score >= 71 ? 'sangat strategis' : score >= 41 ? 'cukup strategis' : 'kurang strategis';
+  const positiveFactors = top3.filter(f => f.isPositive).map(f => f.name.toLowerCase());
+  const negativeFactors = top3.filter(f => !f.isPositive).map(f => f.name.toLowerCase());
+
+  let narasi = `Lokasi <strong>${area}</strong> mendapat skor <strong>${score}/100</strong> dan dikategorikan <strong>${scoreCategory}</strong> untuk usaha ${sectorNames[sector]}.`;
+
+  if (positiveFactors.length > 0) {
+    narasi += ` Faktor pendukung utama: ${positiveFactors.join(', ')}.`;
+  }
+  if (negativeFactors.length > 0) {
+    narasi += ` Hambatan: ${negativeFactors.join(', ')}.`;
+  }
+
+  return { top3, narasi };
+}
+
+// ============================================================
+// MAP INITIALIZATION
+// ============================================================
+const map = L.map('map', {
+  center: [-6.921, 107.607],
+  zoom: 13,
+  zoomControl: true,
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO',
+  maxZoom: 19,
+}).addTo(map);
+
+let heatLayer = null;
+let markerLayer = null;
+let currentScores = [];
+let analysisRan = false;
+
+// ============================================================
+// MAIN ANALYSIS FUNCTION
+// ============================================================
+function runAnalysis() {
+  const sector = document.getElementById('sector-select').value;
+  if (!sector) {
+    alert('Pilih jenis usaha terlebih dahulu!');
+    return;
+  }
+
+  showLoading('Memuat data spasial Bandung...');
+
+  setTimeout(() => {
+    updateLoadingText('Menjalankan model Random Forest...');
+
+    setTimeout(() => {
+      updateLoadingText('Menghitung SHAP values...');
+
+      setTimeout(() => {
+        // Compute scores for all zones
+        currentScores = BANDUNG_ZONES.map(zone => ({
+          zone,
+          score: predictScore(zone, sector),
+        }));
+
+        // Render heatmap
+        renderHeatmap(currentScores);
+
+        // Update stats
+        updateStats(currentScores, sector);
+
+        // Top 3 recommendations
+        renderTopRecs(currentScores, sector);
+
+        // Show detail panel placeholder
+        document.getElementById('detail-panel').classList.add('visible');
+
+        hideLoading();
+        analysisRan = true;
+
+        document.getElementById('map-instruction').textContent =
+          '📍 Klik titik mana saja pada peta untuk melihat analisis detail lokasi';
+
+      }, 600);
+    }, 600);
+  }, 400);
+}
+
+function renderHeatmap(scores) {
+  // Remove existing layers
+  if (heatLayer) map.removeLayer(heatLayer);
+  if (markerLayer) map.removeLayer(markerLayer);
+
+  // Prepare heatmap data [lat, lon, intensity]
+  const heatData = scores.map(({ zone, score }) => [
+    zone[0], zone[1], score / 100
+  ]);
+
+  // Add heatmap layer
+  heatLayer = L.heatLayer(heatData, {
+    radius: 40,
+    blur: 30,
+    maxZoom: 17,
+    max: 1.0,
+    gradient: {
+      0.0: '#1e3a8a',
+      0.3: '#3b82f6',
+      0.5: '#f59e0b',
+      0.7: '#ef4444',
+      1.0: '#fef3c7',
+    },
+  }).addTo(map);
+
+  // Add clickable invisible markers on each zone
+  markerLayer = L.layerGroup();
+  scores.forEach(({ zone, score }) => {
+    const marker = L.circleMarker([zone[0], zone[1]], {
+      radius: 12,
+      fillColor: 'transparent',
+      fillOpacity: 0,
+      color: 'transparent',
+      weight: 0,
+    });
+
+    marker.on('click', () => showLocationDetail(zone, score,
+      document.getElementById('sector-select').value));
+
+    markerLayer.addLayer(marker);
+  });
+  markerLayer.addTo(map);
+
+  // Also click anywhere on map
+  map.on('click', (e) => {
+    if (!analysisRan) return;
+    const nearest = findNearestZone(e.latlng.lat, e.latlng.lng, currentScores);
+    showLocationDetail(nearest.zone, nearest.score,
+      document.getElementById('sector-select').value, e.latlng);
+  });
+}
+
+function findNearestZone(lat, lon, scores) {
+  let nearest = scores[0];
+  let minDist = Infinity;
+  scores.forEach(s => {
+    const d = Math.hypot(s.zone[0] - lat, s.zone[1] - lon);
+    if (d < minDist) { minDist = d; nearest = s; }
+  });
+  return nearest;
+}
+
+function showLocationDetail(zone, score, sector, clickedLatLng) {
+  const { top3, narasi } = generateExplanation(zone, sector, score);
+
+  // Score circle
+  const circle = document.getElementById('score-circle');
+  const scoreEl = document.getElementById('score-num');
+  circle.className = 'score-circle ' + (score >= 71 ? 'high' : score >= 41 ? 'med' : 'low');
+  scoreEl.className = 'score-num ' + (score >= 71 ? 'high' : score >= 41 ? 'med' : 'low');
+  scoreEl.textContent = score;
+
+  // Title & coords
+  const lat = clickedLatLng ? clickedLatLng.lat.toFixed(4) : zone[0].toFixed(4);
+  const lon = clickedLatLng ? clickedLatLng.lng.toFixed(4) : zone[1].toFixed(4);
+  document.getElementById('detail-title').textContent = zone[7] || 'Area Terpilih';
+  document.getElementById('detail-coords').textContent = `${lat}, ${lon}`;
+
+  // Factor bars
+  const container = document.getElementById('factors-container');
+  container.innerHTML = '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Top 3 Faktor Penentu (SHAP)</div>';
+
+  top3.forEach(f => {
+    const pct = Math.round(f.value * 100);
+    const cls = f.isPositive ? 'pos' : 'neg';
+    const dir = f.isPositive ? '▲ Positif' : '▼ Negatif';
+    container.innerHTML += `
+      <div class="factor-item">
+        <div class="factor-header">
+          <span class="factor-name">${f.name}</span>
+          <span class="factor-value ${cls}">${dir} (${pct}%)</span>
+        </div>
+        <div class="factor-bar-bg">
+          <div class="factor-bar-fill ${cls}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  });
+
+  // Explanation
+  document.getElementById('explanation-box').innerHTML = narasi;
+
+  // Scroll sidebar to detail
+  document.getElementById('detail-panel').scrollIntoView({ behavior: 'smooth' });
+
+  // Add pin marker on map
+  if (window._pinMarker) map.removeLayer(window._pinMarker);
+  const pinIcon = L.divIcon({
+    className: '',
+    html: `<div class="pulse-marker"></div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  });
+  window._pinMarker = L.marker(
+    clickedLatLng || [zone[0], zone[1]], { icon: pinIcon }
+  ).addTo(map);
+}
+
+function updateStats(scores, sector) {
+  const total = scores.length;
+  const avg = Math.round(scores.reduce((s, x) => s + x.score, 0) / total);
+  const high = scores.filter(x => x.score >= 71).length;
+  const sectorEmoji = {
+    kuliner:'🍜', retail:'🛍️', jasa:'⚙️', fashion:'👗', kesehatan:'💊'
+  };
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-avg').textContent = avg;
+  document.getElementById('stat-high').textContent = high;
+  document.getElementById('stat-sector').textContent = sectorEmoji[sector] || '—';
+  document.getElementById('stats-section').style.display = 'block';
+}
+
+function renderTopRecs(scores, sector) {
+  const sorted = [...scores].sort((a, b) => b.score - a.score).slice(0, 3);
+  const rankCls = ['r1', 'r2', 'r3'];
+  const rankNum = ['01', '02', '03'];
+
+  const html = sorted.map((s, i) => `
+    <div class="rec-item" onclick="flyToZone(${s.zone[0]}, ${s.zone[1]}, ${s.score}, '${sector}', ${i})">
+      <div class="rec-rank ${rankCls[i]}">${rankNum[i]}</div>
+      <div class="rec-info">
+        <div class="rec-area">${s.zone[7]}</div>
+        <div class="rec-score-text">Skor: ${s.score}/100</div>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('rec-list').innerHTML = html;
+  document.getElementById('recs-section').style.display = 'block';
+}
+
+function flyToZone(lat, lon, score, sector, idx) {
+  map.flyTo([lat, lon], 15, { duration: 1 });
+  setTimeout(() => {
+    const zone = currentScores.find(s => s.zone[0] === lat && s.zone[1] === lon);
+    if (zone) showLocationDetail(zone.zone, zone.score, sector);
+  }, 1100);
+}
+
+// ============================================================
+// LOADING HELPERS
+// ============================================================
+function showLoading(text) {
+  document.getElementById('loading-text').textContent = text;
+  document.getElementById('loading').classList.add('visible');
+  document.getElementById('analyze-btn').disabled = true;
+}
+
+function updateLoadingText(text) {
+  document.getElementById('loading-text').textContent = text;
+}
+
+function hideLoading() {
+  document.getElementById('loading').classList.remove('visible');
+  document.getElementById('analyze-btn').disabled = false;
+}
+</script>
+</body>
+</html>
